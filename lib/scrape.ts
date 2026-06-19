@@ -42,6 +42,7 @@ export async function fetchReadableText(
         "Accept-Language": "en-US,en;q=0.9",
       },
       redirect: "follow",
+      signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {
       text = htmlToText(await res.text());
@@ -61,7 +62,10 @@ export async function fetchReadableText(
       if (process.env.JINA_API_KEY) {
         headers["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
       }
-      const res = await fetch(`https://r.jina.ai/${url}`, { headers });
+      const res = await fetch(`https://r.jina.ai/${url}`, {
+        headers,
+        signal: AbortSignal.timeout(15000),
+      });
       if (res.ok) {
         const jt = (await res.text()).replace(/[ \t\f\v]+/g, " ").trim();
         if (jt.length > text.length) {
@@ -81,7 +85,7 @@ export async function fetchReadableText(
       const beeUrl =
         "https://app.scrapingbee.com/api/v1/?" +
         new URLSearchParams({ api_key: key, url, render_js: "true" }).toString();
-      const res = await fetch(beeUrl);
+      const res = await fetch(beeUrl, { signal: AbortSignal.timeout(20000) });
       if (res.ok) {
         const beeText = htmlToText(await res.text());
         if (beeText.length > text.length) {
@@ -184,4 +188,306 @@ ${clipped}
     .join("");
 
   return parseProfessorJson(raw, university, area);
+}
+
+// ===========================================================================
+// Directory crawl: given a faculty directory URL, follow each professor's
+// profile link, fetch the profile page, pull the real email, and structure it.
+// ===========================================================================
+
+interface ProfileLink {
+  href: string;
+  text: string;
+}
+
+const MAX_PROFILES = 16;
+const CRAWL_CONCURRENCY = 8;
+
+const EMAIL_GLOBAL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+function extractEmails(text: string): string[] {
+  const found = (text.match(EMAIL_GLOBAL) || []).map((e) => e.toLowerCase());
+  const cleaned = found.filter(
+    (e) => !/\.(png|jpe?g|gif|svg|webp|css|js)$/.test(e) && !e.startsWith("//")
+  );
+  return Array.from(new Set(cleaned));
+}
+
+function absolutize(base: string, href: string): string {
+  try {
+    return new URL(href, base).toString();
+  } catch {
+    return "";
+  }
+}
+
+function parseMarkdownLinks(md: string, base: string): ProfileLink[] {
+  const links: ProfileLink[] = [];
+  const re = /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(md))) {
+    const text = m[1].replace(/\s+/g, " ").trim();
+    const href = absolutize(base, m[2]);
+    if (href) links.push({ href, text });
+  }
+  return links;
+}
+
+// Same registrable domain (last two labels) — profiles often sit on a subdomain.
+function sameSite(a: string, b: string): boolean {
+  const reg = (h: string) => h.toLowerCase().split(".").slice(-2).join(".");
+  return reg(a) === reg(b);
+}
+
+// Faculty directories link each professor by their name — a strong signal.
+function nameLike(t: string): boolean {
+  const s = (t || "").trim();
+  if (s.length < 4 || s.length > 40) return false;
+  return /^[A-Z][a-zA-Z.'’-]+(?:\s+[A-Z][a-zA-Z.'’-]+){1,3}$/.test(s);
+}
+
+async function pool<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const out: (R | undefined)[] = new Array(items.length);
+  let i = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (i < items.length) {
+        const idx = i++;
+        try {
+          out[idx] = await fn(items[idx]);
+        } catch {
+          out[idx] = undefined;
+        }
+      }
+    }
+  );
+  await Promise.all(workers);
+  return out.filter((x): x is R => x !== undefined);
+}
+
+// Fetch a directory page and return its outgoing links + readable text.
+async function fetchDirectory(
+  url: string
+): Promise<{ links: ProfileLink[]; text: string; source: ScrapeSource }> {
+  let html = "";
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": BROWSER_UA,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) html = await res.text();
+  } catch {
+    // try Jina below
+  }
+
+  if (html && htmlToText(html).length >= 300) {
+    const $ = cheerio.load(html);
+    const links: ProfileLink[] = [];
+    $("a[href]").each((_i, el) => {
+      const href = absolutize(url, $(el).attr("href") || "");
+      const text = $(el).text().replace(/\s+/g, " ").trim();
+      if (href) links.push({ href, text });
+    });
+    return { links, text: htmlToText(html), source: "direct" };
+  }
+
+  // Jina Reader fallback (free) — markdown keeps the profile links.
+  try {
+    const headers: Record<string, string> = {
+      "User-Agent": BROWSER_UA,
+      Accept: "text/markdown, text/plain, */*",
+    };
+    if (process.env.JINA_API_KEY) {
+      headers["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+    }
+    const res = await fetch(`https://r.jina.ai/${url}`, {
+      headers,
+      signal: AbortSignal.timeout(20000),
+    });
+    if (res.ok) {
+      const md = await res.text();
+      return {
+        links: parseMarkdownLinks(md, url),
+        text: md.replace(/[ \t\f\v]+/g, " ").trim(),
+        source: "jina",
+      };
+    }
+  } catch {
+    // fall through
+  }
+
+  return { links: [], text: htmlToText(html), source: "direct" };
+}
+
+// From all links on a directory page, choose the ones that look like
+// individual professor profiles.
+function pickProfileLinks(links: ProfileLink[], baseUrl: string): ProfileLink[] {
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return [];
+  }
+  const basePath = base.origin + base.pathname.replace(/\/+$/, "");
+  const seen = new Set<string>();
+  const named: ProfileLink[] = [];
+  const hinted: ProfileLink[] = [];
+  const DENY = /(login|sign-?in|register|search|privacy|terms|cookie|apply|admission|give|donate|news|events?|calendar|contact|about|sitemap|careers|alumni|^\/?$)/i;
+
+  for (const l of links) {
+    let u: URL;
+    try {
+      u = new URL(l.href);
+    } catch {
+      continue;
+    }
+    if (u.protocol !== "http:" && u.protocol !== "https:") continue;
+    if (!sameSite(u.hostname, base.hostname)) continue;
+    const clean = u.origin + u.pathname.replace(/\/+$/, "");
+    if (clean === basePath) continue;
+    if (seen.has(clean)) continue;
+    const path = u.pathname.toLowerCase();
+    if (/\.(pdf|jpe?g|png|gif|svg|zip|docx?|xlsx?|pptx?)$/.test(path)) continue;
+    if (path.split("/").filter(Boolean).length < 1) continue;
+    if (DENY.test(path)) continue;
+    seen.add(clean);
+    if (nameLike(l.text)) named.push({ href: clean, text: l.text });
+    else if (/faculty|people|profile|bio|member|person|staff|directory|scholar/.test(path)) {
+      hinted.push({ href: clean, text: l.text });
+    }
+  }
+
+  // Prefer name-linked profiles; otherwise fall back to path-hinted ones.
+  return named.length >= 3 ? named : named.concat(hinted);
+}
+
+// One Claude call to structure all crawled profiles into professor rows.
+async function extractProfessorsFromCandidates(
+  candidates: { name: string; url: string; emails: string[]; text: string }[],
+  university: string,
+  area: string
+): Promise<ProfessorSeed[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
+  const client = new Anthropic({ apiKey });
+
+  const universityHint = university
+    ? `Use "${university}" as the university for every professor.`
+    : `Infer the university from the profile URL host / email domain; never leave it blank.`;
+  const areaInstruction = area
+    ? `Only include professors whose research clearly relates to "${area}"; skip the rest.`
+    : "Include every candidate that has a real email.";
+
+  const blocks = candidates
+    .map(
+      (c, i) => `=== Candidate ${i + 1} ===
+Name hint: ${c.name || "(unknown)"}
+Profile URL: ${c.url}
+Emails found on page: ${c.emails.join(", ") || "none"}
+Page text: ${c.text.slice(0, 1500)}`
+    )
+    .join("\n\n");
+
+  const prompt = `You are extracting faculty contact data from several professor profile pages.
+
+Return ONLY a JSON array (no prose, no markdown, no code fences). One object per candidate that has a real email, with EXACTLY these keys:
+"name", "email", "university", "department", "area", "researchDetail".
+
+Hard rules:
+- "email": choose the candidate's own academic email from their "Emails found" list (prefer one on the institution's domain). NEVER invent one. If "Emails found" is "none", SKIP that candidate.
+- "name": the professor's full name (use the name hint, corrected from the page text if needed).
+- "university": ${universityHint}
+- "department": the department if stated; otherwise infer the single most likely one. Never blank.
+- "area": a short research-domain label of a few words; infer from the page if not stated. Never blank.
+- "researchDetail": one or two sentences on that professor's specific research, from their page text.
+- ${areaInstruction}
+
+Candidates:
+"""
+${blocks}
+"""`;
+
+  const msg = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 8000,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const raw = msg.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  return parseProfessorJson(raw, university, area);
+}
+
+// Orchestrator: single page if it already has emails (e.g. a profile), else
+// crawl the directory's profile links.
+export async function scrapeDirectory(
+  url: string,
+  university: string,
+  area: string
+): Promise<{
+  professors: ProfessorSeed[];
+  source: ScrapeSource;
+  textLength: number;
+  followed: number;
+  profilesWithEmail: number;
+}> {
+  const dir = await fetchDirectory(url);
+  let professors: ProfessorSeed[] = [];
+
+  // If the page itself shows emails, treat it as a single page.
+  if (extractEmails(dir.text).length > 0) {
+    professors = await extractProfessors(dir.text, university, area, url);
+  }
+
+  let followed = 0;
+  let profilesWithEmail = 0;
+
+  // Otherwise follow profile links and pull emails from each profile page.
+  if (professors.length === 0) {
+    const links = pickProfileLinks(dir.links, url).slice(0, MAX_PROFILES);
+    followed = links.length;
+    if (links.length > 0) {
+      const fetched = await pool(links, CRAWL_CONCURRENCY, async (l) => {
+        const r = await fetchReadableText(l.href);
+        return { link: l, text: r.text };
+      });
+      const candidates = fetched
+        .map((f) => ({
+          name: f.link.text,
+          url: f.link.href,
+          emails: extractEmails(f.text),
+          text: f.text,
+        }))
+        .filter((c) => c.emails.length > 0);
+      profilesWithEmail = candidates.length;
+      if (candidates.length > 0) {
+        professors = await extractProfessorsFromCandidates(
+          candidates,
+          university,
+          area
+        );
+      }
+    }
+  }
+
+  return {
+    professors,
+    source: dir.source,
+    textLength: dir.text.length,
+    followed,
+    profilesWithEmail,
+  };
 }

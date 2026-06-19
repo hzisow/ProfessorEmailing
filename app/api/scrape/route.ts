@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchReadableText, extractProfessors } from "@/lib/scrape";
+import { scrapeDirectory } from "@/lib/scrape";
 
 export const maxDuration = 60;
 
@@ -10,28 +10,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "A URL is required." }, { status: 400 });
     }
 
-    const { text, source } = await fetchReadableText(url);
-    if (!text || text.length < 50) {
+    const result = await scrapeDirectory(
+      url,
+      typeof university === "string" ? university : "",
+      typeof area === "string" ? area : ""
+    );
+
+    if (result.textLength < 50 && result.followed === 0) {
       return NextResponse.json(
         {
           error:
-            "Could not read meaningful text from that URL — the site likely blocks automated access entirely. Try an individual professor's profile page, or paste a CSV.",
+            "Could not read that URL — the site likely blocks automated access entirely. Try an individual professor's profile page, or paste a CSV.",
         },
         { status: 422 }
       );
     }
 
-    const professors = await extractProfessors(
-      text,
-      typeof university === "string" ? university : "",
-      typeof area === "string" ? area : "",
-      url
-    );
-
     return NextResponse.json({
-      professors,
-      source,
-      textLength: text.length,
+      professors: result.professors,
+      source: result.source,
+      textLength: result.textLength,
+      followed: result.followed,
+      profilesWithEmail: result.profilesWithEmail,
     });
   } catch (err: any) {
     return NextResponse.json(

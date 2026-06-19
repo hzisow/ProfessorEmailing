@@ -94,15 +94,23 @@ export default function ImportPanel({ onClose }: { onClose: () => void }) {
           ? " via ScrapingBee"
           : "";
       const chars = data.textLength ?? 0;
+      const followed: number = data.followed || 0;
+      const withEmail: number = data.profilesWithEmail || 0;
+      const followNote = followed
+        ? ` Followed ${followed} profile link(s); ${withEmail} had emails.`
+        : "";
+
       if (seeds.length === 0) {
         setScrapeError(
-          `Read ${chars} characters${via} but found no email addresses on that page. This is usually a directory index that only lists names linking to individual profile pages (the emails live there), or a site that hides/obfuscates addresses. Try an individual professor's profile page or a department "people" page that shows emails — or paste a CSV (most reliable).`
+          followed
+            ? `Read ${chars} characters${via}.${followNote} Couldn't pull emails — those profile pages likely hide/obfuscate addresses or block automated access. Try a specific professor's profile URL, or paste a CSV (most reliable).`
+            : `Read ${chars} characters${via} but found no professor profile links or emails. Try the school's faculty directory URL, an individual profile page, or paste a CSV.`
         );
         return;
       }
       const added = addSeeds(seeds);
       setScrapeMsg(
-        `Found ${seeds.length} professor(s) with real emails${via}; added ${added} new (deduped by email); read ${chars} chars.`
+        `Found ${seeds.length} professor(s) with real emails${via}.${followNote} Added ${added} new (deduped by email).`
       );
     } catch (e: any) {
       setScrapeError(e?.message || "Scrape failed.");
@@ -151,8 +159,9 @@ export default function ImportPanel({ onClose }: { onClose: () => void }) {
         <section className={s.importSection}>
           <h3 className={s.importSectionTitle}>Scrape a faculty directory</h3>
           <p className={s.importHint}>
-            Fetched server-side and read with Claude. Emails are never invented — a
-            professor is skipped unless their real address is on the page.
+            Paste a directory URL. If the page only lists names, the app follows
+            each professor&apos;s profile link and pulls their real email
+            automatically (free, renders JavaScript). Emails are never invented.
           </p>
           <div className={s.field}>
             <label className={s.label}>Directory URL</label>
@@ -188,7 +197,7 @@ export default function ImportPanel({ onClose }: { onClose: () => void }) {
             onClick={handleScrape}
             disabled={scraping}
           >
-            {scraping ? "Scraping…" : "Scrape & add"}
+            {scraping ? "Scraping directory…" : "Scrape directory & add"}
           </button>
           {scrapeMsg && <p className={s.statusLine}>{scrapeMsg}</p>}
           {scrapeError && <div className={s.error}>{scrapeError}</div>}
