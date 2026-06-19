@@ -1,0 +1,107 @@
+:root {
+  /* Palette — academic letterhead / research console */
+  --paper: #fbfaf7;
+  --card: #ffffff;
+  --ink: #14213d;
+  --ink-blue: #1d3a8a;
+  --ink-blue-soft: rgba(29, 58, 138, 0.12);
+  --amber: #c2772a;
+  --amber-soft: rgba(194, 119, 42, 0.14);
+  --green: #2f7a52;
+  --green-soft: rgba(47, 122, 82, 0.14);
+  --red: #a33a3a;
+  --red-soft: rgba(163, 58, 58, 0.12);
+
+  --rule: #e7e3d8;
+  --rule-strong: #d8d3c4;
+  --muted: #6b6857;
+  --field-bg: #f3f1ea;
+
+  /* Type */
+  --serif: Georgia, "Times New Roman", serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: var(--ink-blue);
+}
+
+/* Form controls — shared baseline */
+input,
+textarea,
+select,
+button {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+input[type="text"],
+input[type="url"],
+input[type="email"],
+input[type="number"],
+textarea,
+select {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 9px 11px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  border-color: var(--ink-blue);
+  box-shadow: 0 0 0 3px var(--ink-blue-soft);
+}
+
+/* Monospace data fields, emails, labels, stat numbers */
+.mono {
+  font-family: var(--mono);
+}
+
+::placeholder {
+  color: #9a978a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
