@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import NavBar from "@/components/NavBar";
 
 export const metadata: Metadata = {
-  title: "ProfPing — research outreach console",
+  title: "ProfPing — land your dream research position",
   description:
-    "Source, verify, and cold-email business school professors about research positions.",
+    "Connect with thousands of professors. Upload your resume, let AI craft the perfect email, and send directly from Gmail.",
 };
 
 export default function RootLayout({
@@ -14,7 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <NavBar />
+        {children}
+      </body>
     </html>
   );
 }

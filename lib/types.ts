@@ -23,6 +23,17 @@ export type SendStatus =
   | "sent"
   | "error";
 
+// What happened to a sent email, detected from the sender's own Gmail thread.
+// "no_reply" = delivered, awaiting; "responded" = a reply came back;
+// "bounced" = a delivery-failure / mailer-daemon message; "unknown" = couldn't check.
+export type Engagement = "no_reply" | "responded" | "bounced" | "unknown";
+
+export interface EngagementResult {
+  email: string;
+  engagement: Engagement;
+  info?: string;
+}
+
 export interface Professor {
   id: string;
   name: string;
@@ -36,6 +47,12 @@ export interface Professor {
   verification?: VerificationResult;
   status: SendStatus;
   statusMessage?: string;
+  // Post-send tracking (populated after a successful send + a tracking check).
+  threadId?: string;
+  sentAt?: number;
+  engagement?: Engagement;
+  engagementInfo?: string;
+  engagementCheckedAt?: number;
 }
 
 // The raw fields produced by scraping / CSV import, before we attach a UI id,

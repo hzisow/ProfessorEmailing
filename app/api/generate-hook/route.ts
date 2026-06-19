@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     const client = new Anthropic({ apiKey });
 
-    const prompt = `You are helping a 10th-grade high school student write ONE sentence for a cold email to a business school professor. The student is genuinely interested in finance and artificial intelligence.
+    const prompt = `You are helping a sincere 10th-grade high school student write ONE opening sentence for a cold email to a business school professor. The student is genuinely interested in finance and artificial intelligence and wants a research position.
 
 Professor: ${name || "(unknown)"}
 University: ${university || "(unknown)"}
@@ -24,12 +24,14 @@ Research area: ${area || "(unknown)"}
 Specific research detail: ${researchDetail || "(none provided)"}
 
 Write ONE single sentence that:
-- Names something SPECIFIC about this professor's work (draw on the research detail above).
-- Ties it to the student's interest in finance and AI.
-- Begins with "I came across your work on" (or a very close variant).
-- Sounds like a sincere, curious sophomore — NOT a marketer or salesperson.
-- Does NOT use flattery words such as "groundbreaking", "fascinating", "impressive", "amazing", "incredible", or "honored".
-- Is plain, concrete, and specific — never gushing.
+- Names something CONCRETE and specific about THIS professor's work — pull a real topic, method, or focus from the research detail above, not a vague summary.
+- Ties that specific topic to the student's interest in finance and AI.
+- Begins with "I came across your work on" or a close, natural variant (e.g. "I came across your research on", "I recently read about your work on", "I came across your work studying").
+- Sounds like a curious, sincere high school sophomore — plain and direct, NOT a marketer or salesperson.
+- Does NOT use flattery or filler words such as "groundbreaking", "fascinating", "impressive", "amazing", "incredible", "honored", or "pioneering".
+- Is specific enough that it could only have been written about this professor — name the actual subject, not "your research" in the abstract.
+
+Here is the level of specificity to match (this exact style secured a research position): "I came across the CAMS webpage and was drawn to the topics at the intersection of cybersecurity and business." Match how concrete and grounded that is, but write your own sentence about THIS professor and do not reuse its wording.
 
 Return ONLY the sentence. No quotation marks, no preamble, no extra text.`;
 
@@ -45,7 +47,6 @@ Return ONLY the sentence. No quotation marks, no preamble, no extra text.`;
       .join("")
       .trim();
 
-    // Strip stray wrapping quotes and collapse whitespace.
     hook = hook.replace(/^["'\s]+|["'\s]+$/g, "").replace(/\s+/g, " ").trim();
 
     return NextResponse.json({ hook });

@@ -1,0 +1,77 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: saturate(180%) blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.inner {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+.brand:hover {
+  text-decoration: none;
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--blue);
+}
+
+.brandText {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.link {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.link:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+.linkActive {
+  color: var(--blue);
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--blue), #60a5fa);
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 1px var(--line);
+}
+
+@media (max-width: 600px) {
+  .right {
+    gap: 12px;
+  }
+  .link {
+    font-size: 13px;
+  }
+}

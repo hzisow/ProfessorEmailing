@@ -103,7 +103,12 @@ The app sends mail through the Gmail API as your account. Set up an OAuth client
 With the four Google vars set and the dev server running:
 
 1. Visit <http://localhost:3000/api/auth>. You'll be redirected to Google's consent
-   screen (`access_type=offline`, `prompt=consent`, scope `gmail.send`).
+   screen (`access_type=offline`, `prompt=consent`, scopes `gmail.send` +
+   `gmail.metadata`). The `gmail.metadata` scope is read-only header access used to
+   detect replies and bounces for response tracking — it never reads message bodies.
+   If you authorized an older send-only version before, you must re-run `/api/auth`
+   (revoke first at <https://myaccount.google.com/permissions> if no refresh token is
+   returned) so the new token includes read access.
 2. Approve. You'll land on `/api/auth/callback`, which shows your **refresh token** on a
    simple page.
 3. Copy it into `.env.local` as `GMAIL_REFRESH_TOKEN`, and restart `npm run dev`.
@@ -183,6 +188,26 @@ Without `MAILEROO_API_KEY`, verification uses a local syntax + DNS-MX check only
 (no SMTP/catch-all signals), so you'll mostly see green/red.
 
 ---
+
+## Response tracking
+
+After you send, the dashboard's **STATUS** column shows where each email stands, and the
+**Check responses** button queries your own Gmail (read-only header access via the
+`gmail.metadata` scope) to update it:
+
+- **Sent** — delivered, no reply yet.
+- **Responded** — a reply came back in that thread (green).
+- **Bounced** — a delivery-failure / mailer-daemon message landed in the thread (red).
+
+What is **not** trackable, by design of email itself:
+
+- **Opens** — would require an HTML tracking pixel plus a database to record hits; Gmail
+  also proxies/caches images, making pixel opens unreliable. Not included.
+- **Deletions** — no email provider tells the sender when a recipient deletes a message.
+  There is no signal to read.
+
+Tracking needs the `gmail.metadata` read scope, so if you connected an older send-only
+build, reconnect via `/api/auth` (see above) before using Check responses.
 
 ## Project layout
 

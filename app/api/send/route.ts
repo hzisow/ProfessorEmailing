@@ -26,8 +26,13 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    const id = await sendEmail({ to, subject, body, attachment: normalizedAttachment });
-    return NextResponse.json({ ok: true, id });
+    const { id, threadId } = await sendEmail({
+      to,
+      subject,
+      body,
+      attachment: normalizedAttachment,
+    });
+    return NextResponse.json({ ok: true, id, threadId });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || "Send failed." },
