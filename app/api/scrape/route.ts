@@ -10,12 +10,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "A URL is required." }, { status: 400 });
     }
 
-    const { text, usedScrapingBee } = await fetchReadableText(url);
+    const { text, source } = await fetchReadableText(url);
     if (!text || text.length < 50) {
       return NextResponse.json(
         {
           error:
-            "Could not read meaningful text from that URL. Try a more specific faculty page, or set SCRAPINGBEE_API_KEY for JavaScript-heavy directories.",
+            "Could not read meaningful text from that URL — the site likely blocks automated access entirely. Try an individual professor's profile page, or paste a CSV.",
         },
         { status: 422 }
       );
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       professors,
-      usedScrapingBee,
+      source,
       textLength: text.length,
     });
   } catch (err: any) {

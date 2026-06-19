@@ -21,11 +21,19 @@ export function htmlToText(html: string): string {
   return text.replace(/[ \t\f\v]+/g, " ").replace(/\s*\n\s*\n\s*/g, "\n").trim();
 }
 
-// Step 1 (plain fetch) with a Step 2 ScrapingBee fallback for JS-rendered pages.
+export type ScrapeSource = "direct" | "jina" | "scrapingbee";
+
+// Step 1: plain server-side fetch.
+// Step 2: Jina AI Reader (r.jina.ai) — free, no key needed, renders JS and
+//         often bypasses blocks. Optional JINA_API_KEY raises rate limits.
+// Step 3: ScrapingBee — only if a SCRAPINGBEE_API_KEY is set.
 export async function fetchReadableText(
   url: string
-): Promise<{ text: string; usedScrapingBee: boolean }> {
+): Promise<{ text: string; source: ScrapeSource }> {
   let text = "";
+  let source: ScrapeSource = "direct";
+
+  // Step 1 — plain fetch.
   try {
     const res = await fetch(url, {
       headers: {
@@ -39,32 +47,54 @@ export async function fetchReadableText(
       text = htmlToText(await res.text());
     }
   } catch {
-    // Network error on the plain fetch — try the fallback below if available.
+    // Network/blocked — fall through to the readers below.
   }
 
+  // Step 2 — Jina Reader (free, no signup). Default markdown output keeps
+  // mailto: links, so real emails survive into the text.
+  if (text.length < 500) {
+    try {
+      const headers: Record<string, string> = {
+        "User-Agent": BROWSER_UA,
+        Accept: "text/plain, text/markdown, */*",
+      };
+      if (process.env.JINA_API_KEY) {
+        headers["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+      }
+      const res = await fetch(`https://r.jina.ai/${url}`, { headers });
+      if (res.ok) {
+        const jt = (await res.text()).replace(/[ \t\f\v]+/g, " ").trim();
+        if (jt.length > text.length) {
+          text = jt;
+          source = "jina";
+        }
+      }
+    } catch {
+      // Ignore — try ScrapingBee or use what we have.
+    }
+  }
+
+  // Step 3 — ScrapingBee (optional, requires a key).
   const key = process.env.SCRAPINGBEE_API_KEY;
   if (text.length < 500 && key) {
     try {
       const beeUrl =
         "https://app.scrapingbee.com/api/v1/?" +
-        new URLSearchParams({
-          api_key: key,
-          url,
-          render_js: "true",
-        }).toString();
+        new URLSearchParams({ api_key: key, url, render_js: "true" }).toString();
       const res = await fetch(beeUrl);
       if (res.ok) {
         const beeText = htmlToText(await res.text());
         if (beeText.length > text.length) {
-          return { text: beeText, usedScrapingBee: true };
+          text = beeText;
+          source = "scrapingbee";
         }
       }
     } catch {
-      // Ignore — fall back to whatever the plain fetch produced.
+      // Ignore — use whatever we already have.
     }
   }
 
-  return { text, usedScrapingBee: false };
+  return { text, source };
 }
 
 // Strip code fences and isolate the JSON array, then parse defensively.

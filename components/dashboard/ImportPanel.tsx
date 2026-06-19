@@ -87,11 +87,16 @@ export default function ImportPanel({ onClose }: { onClose: () => void }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Scrape failed.");
       const seeds: ProfessorSeed[] = data.professors || [];
-      const via = data.usedScrapingBee ? " via ScrapingBee" : "";
+      const via =
+        data.source === "jina"
+          ? " via Jina Reader"
+          : data.source === "scrapingbee"
+          ? " via ScrapingBee"
+          : "";
       const chars = data.textLength ?? 0;
       if (seeds.length === 0) {
         setScrapeError(
-          `Read ${chars} characters${via} but found no email addresses on that page. Two common reasons: (1) big school sites (e.g. Wharton, HBS) block automated requests or load faculty via JavaScript, so a plain fetch can't see them; (2) a directory index page only lists names that link to separate profile pages where the emails actually live. Fixes: paste a CSV instead (always works), point the scraper at a page that shows emails directly (a department "people" page or an individual profile), or add a free SCRAPINGBEE_API_KEY for JS-heavy / blocked sites.`
+          `Read ${chars} characters${via} but found no email addresses on that page. This is usually a directory index that only lists names linking to individual profile pages (the emails live there), or a site that hides/obfuscates addresses. Try an individual professor's profile page or a department "people" page that shows emails — or paste a CSV (most reliable).`
         );
         return;
       }
