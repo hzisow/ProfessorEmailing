@@ -315,13 +315,37 @@
   max-width: 240px;
 }
 
-.interests {
-  max-width: 320px;
-  white-space: nowrap;
+.interestsCell {
+  vertical-align: top;
+}
+.interestsClamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 380px;
   color: var(--text);
   font-size: 14px;
+  line-height: 1.5;
+}
+.interestsFull {
+  max-width: 380px;
+  white-space: normal;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.moreBtn {
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0 0;
+}
+.moreBtn:hover {
+  text-decoration: underline;
 }
 
 .na {

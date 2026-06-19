@@ -78,6 +78,15 @@ export default function DashboardPage() {
   const [deptSel, setDeptSel] = useState<string[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const domainOptions = useMemo(
     () =>
@@ -298,10 +307,29 @@ export default function DashboardPage() {
                         )}
                       </td>
                       <td className={s.uniCell}>{p.university || <span className={s.na}>N/A</span>}</td>
-                      <td>
-                        <div className={s.interests} title={p.researchDetail}>
-                          {p.researchDetail || <span className={s.na}>N/A</span>}
-                        </div>
+                      <td className={s.interestsCell}>
+                        {p.researchDetail ? (
+                          <>
+                            <div
+                              className={
+                                expanded.has(p.id) ? s.interestsFull : s.interestsClamp
+                              }
+                            >
+                              {p.researchDetail}
+                            </div>
+                            {p.researchDetail.length > 110 && (
+                              <button
+                                type="button"
+                                className={s.moreBtn}
+                                onClick={() => toggleExpand(p.id)}
+                              >
+                                {expanded.has(p.id) ? "Show less" : "Show more"}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className={s.na}>N/A</span>
+                        )}
                       </td>
                       <td>
                         {(() => {
