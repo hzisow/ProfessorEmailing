@@ -24,6 +24,7 @@ import {
   MIN_THROTTLE_SECONDS,
 } from "@/lib/template";
 import { buildEmail, type SenderInfo } from "@/lib/merge";
+import { enrichFields } from "@/lib/enrich";
 
 const STORAGE_KEY = "profping:data:v2";
 const MAX_BASE64_LEN = 4 * 1024 * 1024;
@@ -197,13 +198,22 @@ export function DashProvider({ children }: { children: React.ReactNode }) {
         if (!email.includes("@")) continue;
         if (existing.has(email) || seen.has(email)) continue;
         seen.add(email);
+        // Auto-populate domain (area), university, and department from
+        // inference whenever the imported row leaves them blank.
+        const enriched = enrichFields({
+          email,
+          university: seed.university,
+          area: seed.area,
+          department: seed.department,
+          researchDetail: seed.researchDetail,
+        });
         fresh.push({
           id: uid(),
           name: seed.name.trim(),
           email,
-          university: seed.university.trim(),
-          department: seed.department.trim(),
-          area: seed.area.trim(),
+          university: enriched.university,
+          department: enriched.department,
+          area: enriched.area,
           researchDetail: seed.researchDetail.trim(),
           hook: "",
           selected: true,

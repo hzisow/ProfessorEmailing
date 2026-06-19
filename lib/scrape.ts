@@ -106,7 +106,8 @@ function parseProfessorJson(
 export async function extractProfessors(
   text: string,
   university: string,
-  area: string
+  area: string,
+  url = ""
 ): Promise<ProfessorSeed[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set.");
@@ -116,6 +117,11 @@ export async function extractProfessors(
   const areaInstruction = area
     ? `Only include professors whose research clearly matches or relates to "${area}". Discard everyone else.`
     : "Include every professor you can find.";
+  const universityHint = university
+    ? `Use "${university}" as the university for every professor.`
+    : `Infer the university from the page text or the page URL host (${
+        url || "unknown"
+      }) and email domains — for example wharton.upenn.edu means University of Pennsylvania. Always provide a best-effort university; never leave it blank.`;
 
   const prompt = `You are extracting faculty contact data from the readable text of a university department or faculty web page.
 
@@ -125,9 +131,9 @@ Return ONLY a JSON array (no prose, no markdown, no code fences). Each element i
 Hard rules:
 - NEVER invent, guess, or construct an email address. If a professor's real email address does not appear verbatim in the text below, SKIP that professor entirely.
 - "email" must be copied exactly from the text and must contain "@".
-- "university": use "${university || "the university named in the text"}".
-- "department": the department if you can tell, otherwise "".
-- "area": a short research-area label (a few words).
+- "university": ${universityHint}
+- "department": the department if stated; otherwise infer the single most likely department from their research (e.g. "Finance", "Marketing"). Never leave it blank.
+- "area": a short research-domain label of a few words (e.g. "Finance", "AI & Machine Learning"). Always provide one; infer it from the research if not stated.
 - "researchDetail": one or two sentences describing that professor's specific research, drawn only from the text.
 - ${areaInstruction}
 

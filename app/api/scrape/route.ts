@@ -24,7 +24,8 @@ export async function POST(req: NextRequest) {
     const professors = await extractProfessors(
       text,
       typeof university === "string" ? university : "",
-      typeof area === "string" ? area : ""
+      typeof area === "string" ? area : "",
+      url
     );
 
     return NextResponse.json({
