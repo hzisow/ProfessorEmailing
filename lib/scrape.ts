@@ -226,12 +226,15 @@ function absolutize(base: string, href: string): string {
 
 function parseMarkdownLinks(md: string, base: string): ProfileLink[] {
   const links: ProfileLink[] = [];
-  const re = /\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g;
+  // Accept both absolute and relative hrefs; resolve relative against base.
+  const re = /\[([^\]]*)\]\(([^)\s]+)\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(md))) {
+    const rawHref = m[2].trim();
+    if (/^(mailto:|tel:|javascript:|#|data:)/i.test(rawHref)) continue;
     const text = m[1].replace(/\s+/g, " ").trim();
-    const href = absolutize(base, m[2]);
-    if (href) links.push({ href, text });
+    const href = absolutize(base, rawHref);
+    if (href && /^https?:\/\//i.test(href)) links.push({ href, text });
   }
   return links;
 }
@@ -343,7 +346,8 @@ function pickProfileLinks(links: ProfileLink[], baseUrl: string): ProfileLink[] 
   } catch {
     return [];
   }
-  const basePath = base.origin + base.pathname.replace(/\/+$/, "");
+  const basePath =
+    base.origin + base.pathname.replace(/\/+$/, "") + (base.search || "");
   const seen = new Set<string>();
   const named: ProfileLink[] = [];
   const hinted: ProfileLink[] = [];
@@ -358,7 +362,9 @@ function pickProfileLinks(links: ProfileLink[], baseUrl: string): ProfileLink[] 
     }
     if (u.protocol !== "http:" && u.protocol !== "https:") continue;
     if (!sameSite(u.hostname, base.hostname)) continue;
-    const clean = u.origin + u.pathname.replace(/\/+$/, "");
+    // Keep the query string — many sites key profiles by ?id=/?facId=.
+    const clean =
+      u.origin + u.pathname.replace(/\/+$/, "") + (u.search || "");
     if (clean === basePath) continue;
     if (seen.has(clean)) continue;
     const path = u.pathname.toLowerCase();
