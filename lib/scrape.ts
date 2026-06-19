@@ -42,7 +42,7 @@ export async function fetchReadableText(
         "Accept-Language": "en-US,en;q=0.9",
       },
       redirect: "follow",
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
       text = htmlToText(await res.text());
@@ -64,7 +64,7 @@ export async function fetchReadableText(
       }
       const res = await fetch(`https://r.jina.ai/${url}`, {
         headers,
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(10000),
       });
       if (res.ok) {
         const jt = (await res.text()).replace(/[ \t\f\v]+/g, " ").trim();
@@ -200,8 +200,11 @@ interface ProfileLink {
   text: string;
 }
 
-const MAX_PROFILES = 16;
-const CRAWL_CONCURRENCY = 8;
+const MAX_PROFILES = 40;
+const CRAWL_CONCURRENCY = 10;
+// Stop starting new profile fetches after this long so there's time left to
+// structure the results before Vercel's 60s function limit.
+const CRAWL_FETCH_BUDGET_MS = 25000;
 
 const EMAIL_GLOBAL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
@@ -249,7 +252,8 @@ function nameLike(t: string): boolean {
 async function pool<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T) => Promise<R>
+  fn: (item: T) => Promise<R>,
+  deadlineMs?: number
 ): Promise<R[]> {
   const out: (R | undefined)[] = new Array(items.length);
   let i = 0;
@@ -257,6 +261,7 @@ async function pool<T, R>(
     { length: Math.min(limit, items.length) },
     async () => {
       while (i < items.length) {
+        if (deadlineMs && Date.now() > deadlineMs) break;
         const idx = i++;
         try {
           out[idx] = await fn(items[idx]);
@@ -312,7 +317,7 @@ async function fetchDirectory(
     }
     const res = await fetch(`https://r.jina.ai/${url}`, {
       headers,
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(12000),
     });
     if (res.ok) {
       const md = await res.text();
@@ -394,7 +399,7 @@ async function extractProfessorsFromCandidates(
 Name hint: ${c.name || "(unknown)"}
 Profile URL: ${c.url}
 Emails found on page: ${c.emails.join(", ") || "none"}
-Page text: ${c.text.slice(0, 1500)}`
+Page text: ${c.text.slice(0, 1200)}`
     )
     .join("\n\n");
 
@@ -419,7 +424,7 @@ ${blocks}
 
   const msg = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 8000,
+    max_tokens: 12000,
     messages: [{ role: "user", content: prompt }],
   });
 
@@ -458,12 +463,18 @@ export async function scrapeDirectory(
   // Otherwise follow profile links and pull emails from each profile page.
   if (professors.length === 0) {
     const links = pickProfileLinks(dir.links, url).slice(0, MAX_PROFILES);
-    followed = links.length;
     if (links.length > 0) {
-      const fetched = await pool(links, CRAWL_CONCURRENCY, async (l) => {
-        const r = await fetchReadableText(l.href);
-        return { link: l, text: r.text };
-      });
+      const deadline = Date.now() + CRAWL_FETCH_BUDGET_MS;
+      const fetched = await pool(
+        links,
+        CRAWL_CONCURRENCY,
+        async (l) => {
+          const r = await fetchReadableText(l.href);
+          return { link: l, text: r.text };
+        },
+        deadline
+      );
+      followed = fetched.length;
       const candidates = fetched
         .map((f) => ({
           name: f.link.text,
